@@ -30,17 +30,27 @@ Modular Raspberry Pi YOLOv11n OBB -> YOLO4r
 ------------------
 Terminal Commands:
 ------------------
+INSTALL CORE SYSTEM DEPENDENCIES:
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y build-essential cmake git pkg-config libjpeg-dev libtiff-dev libpng-dev \
+    libavcodec-dev libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
+    libgtk-3-dev libatlas-base-dev gfortran python3-dev
+sudo apt install mediainfo
+sudo apt install python3-picamera2 libcamera-apps
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/raspberrypi
 
-CREATE MAMBA ENVIRONMENT
-mama create -n yolo-env python=3.10
-mamba activate yolo-env
-cd /home/trevelline-lab-pi-1/YOLO
+CREATE ENVIRONMENT
+python3 -m venv ~/yolo-env
+source ~/yolo-env/bin/activate
+python -m pip install --upgrade pip
 
 INSTALL LIBRARIES
-numpy>=1.23.0
-opencv-python-headless>=4.7.0
-tflite-runtime>=2.15.0
-picamera2>=0.0.4; sys_platform == "linux"
+pip install numpy>=1.23.0 opencv-python-headless>=4.7.0 Pillow>=10.0.1 tqdm>=4.64.1 matplotlib>=3.6.3 pandas>=1.5.3 ultralytics==8.3.184 pymediainfo>=22.0 picamera2
+
+
+
+
+
 
 
 
