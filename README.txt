@@ -1,4 +1,6 @@
+--------------------------------------------
 Modular Raspberry Pi YOLOv11n OBB -> YOLO4r
+--------------------------------------------
 
 	- PiCamera2 is supported, along with video input.
         Example start-up command:
@@ -46,6 +48,7 @@ python -m pip install --upgrade pip
 
 INSTALL LIBRARIES
 pip install numpy>=1.23.0 opencv-python-headless>=4.7.0 Pillow>=10.0.1 tqdm>=4.64.1 matplotlib>=3.6.3 pandas>=1.5.3 ultralytics==8.3.184 pymediainfo>=22.0 picamera2
+
 
 
 
