@@ -10,8 +10,8 @@ from utilities.detectpi.logger import Dashboard
 from utilities.detectpi.video_rotation import get_rotation_angle, rotate_frame
 
 try:
-    import picamera
-    import picamera.array
+    "imports picamera2 only if accessible by the system"
+    from picamera2 import Picamera2
     HAS_PICAMERA = True
 except ImportError:
     HAS_PICAMERA = False
@@ -19,16 +19,15 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 
 def open_source(src):
+    """Open a video file or picamera2 stream"""
     if str(src).lower() == "picamera":
         if not HAS_PICAMERA:
-            raise RuntimeError("picamera not available on this system!")
-
-        cam = picamera.PiCamera()
-        cam.resolution = (640, 480)
-        cam.framerate = 20
-        raw_capture = picamera.array.PiRGBArray(cam, size=(640, 480))
-        time.sleep(0.2)  # give camera time to warm up
-        return (cam, raw_capture), "picamera"
+            raise RuntimeError("Picamera2 not available on this system!")
+        cam = Picamera2()
+        config = cam.create_video_configuration(main={"size": (640, 480)}) # sets resolution
+        cam.configure(config)
+        cam.start()
+        return cam, "picamera"
     else:
         cap = cv2.VideoCapture(str(src))
         if not cap.isOpened():
@@ -37,24 +36,20 @@ def open_source(src):
 
 def read_frame(source, source_type):
     if source_type == "picamera":
-        cam, raw_capture = source
-        raw_capture.truncate(0)  # clear the stream
-        cam.capture(raw_capture, format="bgr", use_video_port=True)
-        frame = raw_capture.array
-        return True, frame
+        return True, source.capture_array()
     else:
         return source.read()
 
 def run_detection(model, src, dashboard):
     from utilities.detectpi.video_rotation import get_rotation_angle, rotate_frame
 
-    # ---------- Prepare output ----------
+    # ---------- Prepare Output ----------
     raw_source_name = Path(src).stem
     display_name = raw_source_name
     safe_source_name = re.sub(r"[^\w\-\.]", "_", raw_source_name)
     timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
 
-    # Determine source type
+    # determines source type
     source, source_type = open_source(src)
     out_path = get_output_folder(
         model.weights_path,
@@ -63,12 +58,12 @@ def run_detection(model, src, dashboard):
     )
     out_file = out_path / f"{safe_source_name}_{timestamp}.mp4"
 
-    # ---------- Setup rotation for videos ----------
+    # ---------- Setup Rotation for Videos ----------
     rotation_angle = 0
     if source_type == "video":
         rotation_angle = get_rotation_angle(src)
 
-    # ---------- Open first frame to get dimensions ----------
+    # opens first frame to get dimensions for rotation of vertical videos
     ret, frame = read_frame(source, source_type)
     if not ret or frame is None:
         dashboard.log(f"[ERROR] Could not read from {raw_source_name}")
@@ -105,12 +100,12 @@ def run_detection(model, src, dashboard):
             results = model.predict(frame, verbose=False, show=False, imgsz=640)
             draw_frame = results[0].plot() if results else frame
 
-            # ----- Use current boxes -----
+            # ----- Use Current Boxes -----
             current_boxes_list = []
             if results and hasattr(results[0], "obb") and results[0].obb is not None:
                 boxes = results[0].obb.xywhr.cpu().numpy()
                 classes = results[0].obb.cls.cpu().numpy()
-                # Build [cx, cy, w, h, angle, cls] items directly from detections
+                # Build [cx, cy, w, h, angle, cls] items directly from detections to be used in object counts
                 current_boxes_list = [
                     [cx, cy, w, h, float(angle), int(cls)]
                     for cx, cy, w, h, angle, cls in zip(boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], classes)
@@ -121,7 +116,7 @@ def run_detection(model, src, dashboard):
             prev_time = time.time()
             frame_count += 1
 
-            # ----- Count objects from current detections -----
+            # ----- Count Objects from Current Detections -----
             males = sum(1 for b in current_boxes_list if names.get(b[5]) == "M")
             females = sum(1 for b in current_boxes_list if names.get(b[5]) == "F")
             other_objects = sum(1 for b in current_boxes_list if names.get(b[5]) not in ["M", "F"])
@@ -140,7 +135,7 @@ def run_detection(model, src, dashboard):
             rs = int(remaining_sec) % 60
             time_info = f"{eh:02d}:{es:02d}/{rh:02d}:{rm:02d}:{rs:02d}"
 
-            # ----- Display logging -----
+            # ----- Display Logging -----
             if frame_count % 5 == 0:
                 dashboard.update_line(
                     1,
@@ -155,15 +150,12 @@ def run_detection(model, src, dashboard):
         dashboard.log("[EXIT] Stop signal received. Terminating pipeline...")
     finally:
         dashboard.safe_release_writer(raw_source_name)
-        if source_type == "picamera":
-            cam, _ = source
-            cam.close()
+
 
 # ---- MAIN ----
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # Always use main folder
     runs_dir = BASE_DIR / "runs/main"
     weights_path = find_latest_best(runs_dir)
     if not weights_path:
@@ -178,14 +170,14 @@ if __name__ == "__main__":
 
     src = args.source
 
-    # ----- Try running detection, handle picamera gracefully -----
+    # ----- Run Detection -----
     try:
         run_detection(model, src, dashboard)
     except RuntimeError as e:
         if "Picamera2 not available" in str(e):
             dashboard.log("[ERROR] Picamera2 not supported on this system. Please use a video file instead.")
         else:
-            raise  # re-raise any other runtime errors
+            raise  # re-raises any other runtime errors
 
     dashboard.release_all_writers()
     dashboard.log("[EXIT] All detection threads safely terminated.")
