@@ -1,6 +1,30 @@
-numpy>=1.23.0
-opencv-python-headless>=4.7.0
-Pillow>=10.0.1
-ultralytics==8.3.184
-pymediainfo>=22.0
-picamera2 
+Step 1: System OS Requirements
+sudo apt update
+sudo apt install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev libbz2-dev liblzma-dev tk-dev libdb-dev libexpat1-dev libgmp-dev libmpdec-dev libfreetype6-dev libjpeg-dev libpng-dev libtiff-dev libopenjp2-7-dev libatlas-base-dev libopenblas-dev gfortran ffmpeg wget
+
+Step 2: Python 3.10.13 Compilation (if needed !!)
+cd ~
+wget https://www.python.org/ftp/python/3.10.13/Python-3.10.13.tgz
+tar xvf Python-3.10.13.tgz
+cd Python-3.10.13
+./configure --enable-optimizations
+make -j2
+sudo make altinstall
+
+OR
+
+Step 2: Python 3.10.13 Clean and Recompile (if needed !!)
+cd ~/Python-3.10.13
+make clean
+./configure --enable-optimizations --with-lto --with-ensurepip=install --enable-shared --with-system-ffi --with-computed-gotos
+make -j2
+sudo make altinstall
+
+Step 3: Setup Virtual Environment in Python
+python3.10 -m venv ~/yolo-env
+source ~/yolo-env/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+pip install numpy>=1.23.0 opencv-python-headless>=4.7.0 Pillow>=10.0.1 tqdm>=4.64.1 matplotlib>=3.6.3 pandas>=1.5.3 ultralytics==8.3.184 pymediainfo>=22.0 picamera2 imageio-ffmpeg
+
+Step 4: Run Inference
+python detect.py --source (picamera OR /path/to/video.type)
