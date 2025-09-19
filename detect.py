@@ -4,10 +4,9 @@ from datetime import datetime
 import numpy as np
 import cv2
 from ultralytics import YOLO
-from utilities.detectpi.box_smoothing import BoxSmoother
 from utilities.detectpi.paths import find_latest_best, get_output_folder
 from utilities.detectpi.arg_parser import parse_arguments
-from utilities.detectpi.logger import DetectionDashboard
+from utilities.detectpi.logger import Dashboard
 from utilities.detectpi.video_rotation import get_rotation_angle, rotate_frame
 
 try:
@@ -41,16 +40,16 @@ def read_frame(source, source_type):
     else:
         return source.read()
 
-def run_detection(model, src, dashboard, smoother):
+def run_detection(model, src, dashboard):
     from utilities.detectpi.video_rotation import get_rotation_angle, rotate_frame
 
-    # ---------- Prepare output ----------
+    # ---------- Prepare Output ----------
     raw_source_name = Path(src).stem
     display_name = raw_source_name
     safe_source_name = re.sub(r"[^\w\-\.]", "_", raw_source_name)
     timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
 
-    # Determine source type
+    # determines source type
     source, source_type = open_source(src)
     out_path = get_output_folder(
         model.weights_path,
@@ -59,12 +58,12 @@ def run_detection(model, src, dashboard, smoother):
     )
     out_file = out_path / f"{safe_source_name}_{timestamp}.mp4"
 
-    # ---------- Setup rotation for videos ----------
+    # ---------- Setup Rotation for Videos ----------
     rotation_angle = 0
     if source_type == "video":
         rotation_angle = get_rotation_angle(src)
 
-    # ---------- Open first frame to get dimensions ----------
+    # opens first frame to get dimensions for rotation of vertical videos
     ret, frame = read_frame(source, source_type)
     if not ret or frame is None:
         dashboard.log(f"[ERROR] Could not read from {raw_source_name}")
@@ -101,27 +100,26 @@ def run_detection(model, src, dashboard, smoother):
             results = model.predict(frame, verbose=False, show=False, imgsz=640)
             draw_frame = results[0].plot() if results else frame
 
-            # ----- Smooth boxes -----
-            smoothed_boxes_list = []
+            # ----- Use Current Boxes -----
+            current_boxes_list = []
             if results and hasattr(results[0], "obb") and results[0].obb is not None:
                 boxes = results[0].obb.xywhr.cpu().numpy()
                 classes = results[0].obb.cls.cpu().numpy()
-                if frame_count % 3 == 0:
-                    smoothed_boxes = smoother.smooth([
-                        [cx, cy, w, h, float(angle), int(cls)]
-                        for cx, cy, w, h, angle, cls in zip(boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], classes)
-                    ])
-                    smoothed_boxes_list.extend(smoothed_boxes)
+                # Build [cx, cy, w, h, angle, cls] items directly from detections to be used in object counts
+                current_boxes_list = [
+                    [cx, cy, w, h, float(angle), int(cls)]
+                    for cx, cy, w, h, angle, cls in zip(boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], classes)
+                ]
 
             names = results[0].names if results else {}
             fps_smooth = 0.9 * fps_smooth + 0.1 * (1 / (time.time() - prev_time + 1e-6))
             prev_time = time.time()
             frame_count += 1
 
-            # ----- Count objects -----
-            males = sum(1 for b in smoothed_boxes_list if names.get(b[5]) == "M")
-            females = sum(1 for b in smoothed_boxes_list if names.get(b[5]) == "F")
-            other_objects = sum(1 for b in smoothed_boxes_list if names.get(b[5]) not in ["M", "F"])
+            # ----- Count Objects from Current Detections -----
+            males = sum(1 for b in current_boxes_list if names.get(b[5]) == "M")
+            females = sum(1 for b in current_boxes_list if names.get(b[5]) == "F")
+            other_objects = sum(1 for b in current_boxes_list if names.get(b[5]) not in ["M", "F"])
 
             # ----- Timer -----
             if is_video:
@@ -137,7 +135,7 @@ def run_detection(model, src, dashboard, smoother):
             rs = int(remaining_sec) % 60
             time_info = f"{eh:02d}:{es:02d}/{rh:02d}:{rm:02d}:{rs:02d}"
 
-            # ----- Display logging -----
+            # ----- Display Logging -----
             if frame_count % 5 == 0:
                 dashboard.update_line(
                     1,
@@ -158,7 +156,6 @@ def run_detection(model, src, dashboard, smoother):
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # Always use main folder
     runs_dir = BASE_DIR / "runs/main"
     weights_path = find_latest_best(runs_dir)
     if not weights_path:
@@ -169,27 +166,18 @@ if __name__ == "__main__":
     model = YOLO(str(weights_path))
     model.weights_path = weights_path
 
-    dashboard = DetectionDashboard(1)
-    smoother = BoxSmoother(max_history=args.max_history, alpha=args.smooth, dist_thresh=args.dist_thresh)
-
-    # ----- Report smoothing if lab mode -----
-    if args.lab:
-        dashboard.report_smoothing(args, {
-            'smooth': '--smooth' in sys.argv,
-            'dist_thresh': '--dist-thresh' in sys.argv,
-            'max_history': '--max-history' in sys.argv
-        })
+    dashboard = Dashboard(1)
 
     src = args.source
 
-    # ----- Try running detection, handle picamera gracefully -----
+    # ----- Run Detection -----
     try:
-        run_detection(model, src, dashboard, smoother)
+        run_detection(model, src, dashboard)
     except RuntimeError as e:
         if "Picamera2 not available" in str(e):
             dashboard.log("[ERROR] Picamera2 not supported on this system. Please use a video file instead.")
         else:
-            raise  # re-raise any other runtime errors
+            raise  # re-raises any other runtime errors
 
     dashboard.release_all_writers()
     dashboard.log("[EXIT] All detection threads safely terminated.")
