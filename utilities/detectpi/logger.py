@@ -2,7 +2,7 @@ import threading, os
 from pathlib import Path
 import re
 
-class DetectionDashboard:
+class Dashboard:
     def __init__(self, total_sources):
         self.total_sources = total_sources
         self.lock = threading.Lock()
@@ -79,3 +79,4 @@ class DetectionDashboard:
         # make a copy to avoid mutating dict during iteration
         for raw_source_name in list(self.active_writers.keys()):
             self.safe_release_writer(raw_source_name)
+
