@@ -4,11 +4,11 @@ from datetime import datetime
 import numpy as np
 import cv2
 from ultralytics import YOLO
-from utilities.detectpi_test.paths import find_latest_best, get_output_folder
-from utilities.detectpi_test.arg_parser import parse_arguments
-from utilities.detectpi_test.logger import Dashboard
-from utilities.detectpi_test.video_rotation import get_rotation_angle, rotate_frame
-from utilities.detectpi_test.temporal_aggregator import Aggregator
+from utilities.detectpi.paths import find_latest_best, get_output_folder
+from utilities.detectpi.arg_parser import parse_arguments
+from utilities.detectpi.logger import Dashboard
+from utilities.detectpi.video_rotation import get_rotation_angle, rotate_frame
+from utilities.detectpi.temporal_aggregator import Aggregator
 
 try:
     from picamera2 import Picamera2
